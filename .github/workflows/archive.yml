@@ -7,7 +7,6 @@ on:
 
 env:
   PROJECT: Nextcloud.xcodeproj
-  DESTINATION: platform=iOS Simulator,name=iPhone 16,OS=18.5
   SCHEME: Nextcloud
   SERVER_BRANCH: stable30
   PHP_VERSION: 8.3
@@ -33,8 +32,10 @@ jobs:
         set -o pipefail && \
         xcodebuild archive \
         -scheme "${{ env.SCHEME }}" \
-        -destination "${{ env.DESTINATION }}" \
-        -derivedDataPath "DerivedData" \
+        -configuration Release \
+        -sdk iphoneos \
+        -archivePath build/Nextcloud.xcarchive \
+        CODE_SIGNING_ALLOWED=NO \
         | xcbeautify --quieter
 
     - name: Upload Build Products
