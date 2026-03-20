@@ -13,7 +13,6 @@ extension NCNetworking {
         downloadThumbnailActivityQueue.cancelAll()
         downloadThumbnailTrashQueue.cancelAll()
         downloadAvatarQueue.cancelAll()
-        unifiedSearchQueue.cancelAll()
         saveLivePhotoQueue.cancelAll()
     }
 
@@ -110,7 +109,7 @@ extension NCNetworking {
 
         await networking.transferDispatcher.notifyAllDelegates { delegate in
             serverUrls.forEach { serverUrl in
-                delegate.transferReloadData(serverUrl: serverUrl, requestData: false, status: nil)
+                delegate.transferReloadDataSource(serverUrl: serverUrl, requestData: false, status: nil)
             }
         }
     }

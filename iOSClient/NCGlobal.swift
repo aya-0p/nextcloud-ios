@@ -52,6 +52,10 @@ final class NCGlobal: Sendable {
     let nextcloudVersion28: Int                     = 28
     let nextcloudVersion30: Int                     = 30
     let nextcloudVersion31: Int                     = 31
+    let nextcloudVersion32: Int                     = 32
+    let nextcloudVersion33: Int                     = 33
+    let nextcloudVersionFuture: Int                 = 99999
+
 
     // Nextcloud unsupported
     //
@@ -94,10 +98,14 @@ final class NCGlobal: Sendable {
     // E2EE
     //
     let e2eePassphraseTest                          = "more over television factory tendency independence international intellectual impress interest sentence pony"
-    let e2eeVersions                                = ["1.1", "1.2", "2.0"]
-    let e2eeVersionV11                              = "1.1"
-    let e2eeVersionV12                              = "1.2"
-    let e2eeVersionV20                              = "2.0"
+    let e2eeCompatibleVersions                      = ["1.1", "1.2", "2.0", "2.1"]
+
+    func isE2eeVersion2(_ version: String) -> Bool {
+        if version == "2.0" || version == "2.1" {
+            return true
+        }
+        return false
+    }
 
     // CHUNK
     let chunkSizeMBCellular                         = 10000000
@@ -141,8 +149,8 @@ final class NCGlobal: Sendable {
 
     // ContentPresenter
     //
-    let dismissAfterSecond: TimeInterval        = 4
-    let dismissAfterSecondLong: TimeInterval    = 7
+    let dismissAfterSecond: TimeInterval        = 5
+    let dismissAfterSecondLong: TimeInterval    = 8
 
     // Error
     //
@@ -156,6 +164,7 @@ final class NCGlobal: Sendable {
     let errorConflict: Int                      = 409
     let errorPreconditionFailed: Int            = 412
     let errorUnsupportedMediaType: Int          = 415
+    let errorExpectationFailed: Int             = 417
     let errorInternalServerError: Int           = 500
     let errorMaintenance: Int                   = 503
     let errorQuota: Int                         = 507
@@ -166,7 +175,7 @@ final class NCGlobal: Sendable {
     let errorBadServerResponse: Int             = -1011
     let errorInternalError: Int                 = -99999
     let errorFileNotSaved: Int                  = -99998
-    let errorOffline: Int                       = -99997
+    let errorOfflineNotAllowed: Int             = -99997
     let errorCharactersForbidden: Int           = -99996
     let errorCreationFile: Int                  = -99995
     let errorReadFile: Int                      = -99994
@@ -176,6 +185,8 @@ final class NCGlobal: Sendable {
     let errorIncorrectFileName: Int             = -99990
     let errorVersionMismatch: Int               = -99989
     let errorNCSessionNotFound: Int             = -99988
+    let errorNotPermission: Int                 = -99987
+
 
     // E2EE
     let errorE2EENotEnabled: Int                = -98000
@@ -277,13 +288,16 @@ final class NCGlobal: Sendable {
     let notificationCenterOpenMediaDetail                       = "openMediaDetail"                 // userInfo: ocId
 
     let notificationCenterDismissScanDocument                   = "dismissScanDocument"
-    let notificationCenterDismissUploadAssets                   = "dismissUploadAssets"
 
     let notificationCenterEnableSwipeGesture                    = "enableSwipeGesture"
     let notificationCenterDisableSwipeGesture                   = "disableSwipeGesture"
 
     let notificationCenterPlayerIsPlaying                       = "playerIsPlaying"
     let notificationCenterPlayerStoppedPlaying                  = "playerStoppedPlaying"
+
+    let notificationCenterUserInteractionMonitor                = "serInteractionMonitor"
+
+    let notificationCenterNetworkingProcess                     = "networkingProcess"
 
     // Networking Status
     let networkingStatusCreateFolder                            = "statusCreateFolder"
@@ -300,7 +314,6 @@ final class NCGlobal: Sendable {
     let networkingStatusUploaded                                = "statusUploaded"
 
     let networkingStatusReloadAvatar                            = "statusReloadAvatar"
-
 
     // TIP
     //
@@ -402,4 +415,11 @@ final class NCGlobal: Sendable {
     //
     let udMigrationMultiDomains             = "migrationMultiDomains"
     let udLastVersion                       = "lastVersion"
+}
+
+/**
+ Indicates whether Xcode is running SwiftUI previews.
+ */
+var isXcodeRunningForPreviews: Bool {
+    return ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
 }

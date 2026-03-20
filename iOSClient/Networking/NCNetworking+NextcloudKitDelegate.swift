@@ -6,17 +6,32 @@ import Foundation
 import UIKit
 import NextcloudKit
 import Alamofire
+import LucidBanner
 
 extension NCNetworking {
 
-#if !EXTENSION_FILE_PROVIDER_EXTENSION
+#if !EXTENSION
     func networkReachabilityObserver(_ typeReachability: NKTypeReachability) {
         if typeReachability == NKTypeReachability.reachableCellular || typeReachability == NKTypeReachability.reachableEthernetOrWiFi {
             lastReachability = true
         } else {
             if lastReachability {
-                let error = NKError(errorCode: global.errorNetworkNotAvailable, errorDescription: "")
-                NCContentPresenter().messageNotification("_network_not_available_", error: error, delay: global.dismissAfterSecond, type: NCContentPresenter.messageType.info)
+                let windowScenes = UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .filter { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive }
+                Task {
+                    for windowScene in windowScenes {
+                        await showBanner(windowScene: windowScene,
+                                         title: "_info_",
+                                         subtitle: "_network_not_available_",
+                                         textColor: .label,
+                                         image: "wifi.exclamationmark.circle",
+                                         imageAnimation: .bounce,
+                                         imageColor: .label,
+                                         backgroundColor: UIColor.lightGray.withAlphaComponent(0.75))
+
+                    }
+                }
             }
             lastReachability = false
         }

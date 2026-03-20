@@ -59,15 +59,19 @@ class tableMetadata: Object {
     let exifPhotos = List<NCKeyValue>()
     @objc dynamic var favorite: Bool = false
     @objc dynamic var fileId = ""
+    /// The file name as it exists on the server.  `fileName` is the same as `fileNameView`. The only exception is when E2EE is enabled, in which case the `fileName` is obfuscated, while the `fileNameView` shows the human-readable name.
     @objc dynamic var fileName = ""
+    /// The human readable file name . `fileName` is the same as `fileNameView`. The only exception is when E2EE is enabled, in which case the `fileName` is obfuscated, while the `fileNameView` shows the human-readable name.
     @objc dynamic var fileNameView = ""
     @objc dynamic var hasPreview: Bool = false
     @objc dynamic var hidden: Bool = false
     @objc dynamic var iconName = ""
     @objc dynamic var iconUrl = ""
-    @objc dynamic var isFlaggedAsLivePhotoByServer: Bool = false // Indicating if the file is sent as a live photo from the server, or if we should detect it as such and convert it client-side
+    /// Indicating if the file is sent as a live photo from the server, or if we should detect it as such and convert it client-side
+    @objc dynamic var isFlaggedAsLivePhotoByServer: Bool = false
     @objc dynamic var isExtractFile: Bool = false
-    @objc dynamic var livePhotoFile = "" // If this is not empty, the media is a live photo. New media gets this straight from server, but old media needs to be detected as live photo (look isFlaggedAsLivePhotoByServer)
+    /// If this is not empty, the media is a live photo. New media gets this straight from server, but old media needs to be detected as live photo (look isFlaggedAsLivePhotoByServer)
+    @objc dynamic var livePhotoFile = ""
     @objc dynamic var mountType = ""
     @objc dynamic var name = "" // for unifiedSearch is the provider.id
     @objc dynamic var note = ""
@@ -124,6 +128,14 @@ class tableMetadata: Object {
     @objc dynamic var nativeFormat: Bool = false
     @objc dynamic var autoUploadServerUrlBase: String?
     @objc dynamic var typeIdentifier: String = ""
+
+    // =========================
+    // UI / transient properties
+    // =========================
+
+    /// Used only for UI state (not persisted, not observed by Realm)
+    var isOffline: Bool = false
+    var section: String = ""
 
     override static func primaryKey() -> String {
         return "ocId"
@@ -538,6 +550,17 @@ extension NCManageDatabase {
         }
     }
 
+    func deleteMetadatasAsync(ocIds: [String]) async {
+        guard !ocIds.isEmpty else {
+            return
+        }
+        await core.performRealmWriteAsync { realm in
+            let results = realm.objects(tableMetadata.self)
+                .filter("ocId IN %@", ocIds)
+            realm.delete(results)
+        }
+    }
+
     func renameMetadata(fileNameNew: String, ocId: String, status: Int = NCGlobal.shared.metadataStatusNormal) async {
         await core.performRealmWriteAsync { realm in
             guard let metadata = realm.objects(tableMetadata.self)
@@ -896,6 +919,21 @@ extension NCManageDatabase {
                 .filter(predicate)
                 .sorted(byKeyPath: sortedByKeyPath,
                         ascending: ascending)
+
+            if let limit {
+                let sliced = results.prefix(limit)
+                return sliced.map { $0.detachedCopy() }
+            } else {
+                return results.map { $0.detachedCopy() }
+            }
+        }
+    }
+
+    func getMetadatasAsync(predicate: NSPredicate,
+                           limit: Int? = nil) async -> [tableMetadata]? {
+        return await core.performRealmReadAsync { realm in
+            let results = realm.objects(tableMetadata.self)
+                .filter(predicate)
 
             if let limit {
                 let sliced = results.prefix(limit)

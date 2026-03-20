@@ -116,7 +116,7 @@ class NCDeepLinkHandler {
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
             let serverUrl = controller.currentServerUrl()
             let session = NCSession.shared.getSession(controller: controller)
-            let fileFolderPath = NCUtilityFileSystem().getFileNamePath("", serverUrl: serverUrl, session: session)
+            let fileFolderPath = NCUtilityFileSystem().getRelativeFilePath("", serverUrl: serverUrl, session: session)
             let fileFolderName = (serverUrl as NSString).lastPathComponent
             let capabilities = NCNetworking.shared.capabilities[controller.account] ?? NKCapabilities.Capabilities()
 
@@ -140,9 +140,11 @@ class NCDeepLinkHandler {
         controller.selectedIndex = ControllerConstants.moreIndex
         guard let navigationController = controller.viewControllers?[controller.selectedIndex] as? UINavigationController else { return }
 
-        let settingsView = NCSettingsView(model: NCSettingsModel(controller: controller))
-        let settingsController = UIHostingController(rootView: settingsView)
-        navigationController.pushViewController(settingsController, animated: true)
+        Task { @MainActor in
+            let settingsView = NCSettingsView(model: NCSettingsModel(controller: controller))
+            let settingsController = UIHostingController(rootView: settingsView)
+            navigationController.pushViewController(settingsController, animated: true)
+        }
     }
 
     private func navigateToAutoUpload(controller: NCMainTabBarController) {

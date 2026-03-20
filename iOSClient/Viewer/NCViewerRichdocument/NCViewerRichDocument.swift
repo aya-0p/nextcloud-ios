@@ -17,8 +17,14 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
     var metadata: tableMetadata = tableMetadata()
     var imageIcon: UIImage?
 
+    @MainActor
     var session: NCSession.Session {
         NCSession.shared.getSession(account: metadata.account)
+    }
+
+    @MainActor
+    var controller: NCMainTabBarController? {
+        self.tabBarController as? NCMainTabBarController
     }
 
     var sceneIdentifier: String {
@@ -40,7 +46,7 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                 primaryAction: nil,
                 menu: UIMenu(title: "", children: [
                     UIDeferredMenuElement.uncached { [self] completion in
-                        if let menu = NCViewerContextMenu.makeContextMenu(controller: self.tabBarController as? NCMainTabBarController, metadata: self.metadata, webView: true, sender: self) {
+                        if let menu = NCContextMenuViewer(metadata: self.metadata, controller: self.tabBarController as? NCMainTabBarController, webView: true, sender: self).viewMenu() {
                             completion(menu.children)
                         }
                     }
@@ -169,13 +175,17 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                     viewController.includeImages = true
                     viewController.type = ""
                     viewController.session = session
+                    viewController.controller = self.tabBarController as? NCMainTabBarController
 
                     self.present(navigationController, animated: true, completion: nil)
                 }
             }
 
             if message.body as? String == "share" {
-                NCDownloadAction.shared.openShare(viewController: self, metadata: metadata, page: .sharing)
+                NCCreate().createShare(viewController: self,
+                                       controller: self.controller,
+                                       metadata: metadata,
+                                       page: .sharing)
             }
 
             if let param = message.body as? [AnyHashable: Any] {
@@ -184,7 +194,7 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                         guard let type = values["Type"] as? String else { return }
                         guard let urlString = values["URL"] as? String else { return }
                         guard let url = URL(string: urlString) else { return }
-                        let fileName = (metadata.fileName as NSString).deletingPathExtension
+                        var fileName = (metadata.fileName as NSString).deletingPathExtension
                         let fileNameLocalPath = utilityFileSystem.createServerUrl(serverUrl: utilityFileSystem.directoryUserData, fileName: fileName)
 
                         if type == "slideshow" {
@@ -227,12 +237,11 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                                     var item = fileNameLocalPath
 
                                     if let headers {
-                                        if let disposition = headers["Content-Disposition"] as? String {
-                                            let components = disposition.components(separatedBy: "filename=")
-                                            if components.last?.replacingOccurrences(of: "\"", with: "") != nil {
-                                                item = self.utilityFileSystem.createServerUrl(serverUrl: self.utilityFileSystem.directoryUserData, fileName: fileName)
-                                                _ = self.utilityFileSystem.moveFile(atPath: fileNameLocalPath, toPath: item)
-                                            }
+                                        if let disposition = headers["Content-Disposition"] as? String,
+                                           let filenameContentDisposition = self.filenameFromContentDisposition(disposition) {
+                                            fileName = filenameContentDisposition
+                                            item = self.utilityFileSystem.createServerUrl(serverUrl: self.utilityFileSystem.directoryUserData, fileName: fileName)
+                                            _ = self.utilityFileSystem.moveFile(atPath: fileNameLocalPath, toPath: item)
                                         }
                                     }
 
@@ -251,8 +260,10 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                                         self.documentController?.presentOptionsMenu(from: CGRect.zero, in: self.view, animated: true)
                                     }
                                 } else {
-
-                                    NCContentPresenter().showError(error: error)
+                                    Task {
+                                        let windowScene = SceneManager.shared.getWindow(sceneIdentifier: self.sceneIdentifier)?.windowScene
+                                        await showErrorBanner(windowScene: windowScene, text: error.errorDescription, errorCode: error.errorCode)
+                                    }
                                 }
                             })
                         }
@@ -296,9 +307,9 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
 
     // MARK: -
 
-    func dismissSelect(serverUrl: String?, metadata: tableMetadata?, type: String, items: [Any], overwrite: Bool, copy: Bool, move: Bool, session: NCSession.Session) {
+    func dismissSelect(serverUrl: String?, metadata: tableMetadata?, type: String, items: [Any], overwrite: Bool, copy: Bool, move: Bool, session: NCSession.Session, controller: NCMainTabBarController?) {
         if let serverUrl, let metadata {
-            let path = utilityFileSystem.getFileNamePath(metadata.fileName, serverUrl: serverUrl, session: session)
+            let path = utilityFileSystem.getRelativeFilePath(metadata.fileName, serverUrl: serverUrl, session: session)
 
             NextcloudKit.shared.createAssetRichdocuments(path: path, account: metadata.account) { task in
                 Task {
@@ -312,14 +323,17 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                     let functionJS = "OCA.RichDocuments.documentsMain.postAsset('\(metadata.fileNameView)', '\(url)')"
                     self.webView.evaluateJavaScript(functionJS, completionHandler: { _, _ in })
                 } else {
-                    NCContentPresenter().showError(error: error)
+                    Task {
+                        let windowScene = SceneManager.shared.getWindow(sceneIdentifier: self.sceneIdentifier)?.windowScene
+                        await showErrorBanner(windowScene: windowScene, text: error.errorDescription, errorCode: error.errorCode)
+                    }
                 }
             }
         }
     }
 
     func select(_ metadata: tableMetadata!, serverUrl: String!) {
-        let path = utilityFileSystem.getFileNamePath(metadata!.fileName, serverUrl: serverUrl!, session: session)
+        let path = utilityFileSystem.getRelativeFilePath(metadata!.fileName, serverUrl: serverUrl!, session: session)
 
         NextcloudKit.shared.createAssetRichdocuments(path: path, account: metadata.account) { task in
             Task {
@@ -333,7 +347,10 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
                 let functionJS = "OCA.RichDocuments.documentsMain.postAsset('\(metadata.fileNameView)', '\(url)')"
                 self.webView.evaluateJavaScript(functionJS, completionHandler: { _, _ in })
             } else {
-                NCContentPresenter().showError(error: error)
+                Task {
+                    let windowScene = SceneManager.shared.getWindow(sceneIdentifier: self.sceneIdentifier)?.windowScene
+                    await showErrorBanner(windowScene: windowScene, text: error.errorDescription, errorCode: error.errorCode)
+                }
             }
         }
     }
@@ -361,6 +378,22 @@ class NCViewerRichDocument: UIViewController, WKNavigationDelegate, WKScriptMess
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         NCActivityIndicator.shared.stop()
     }
+
+    // MARK: - Helper
+
+    func filenameFromContentDisposition(_ disposition: String) -> String? {
+        if let range = disposition.range(of: "filename=") {
+            var value = String(disposition[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            // Cut at next ';' if present
+            if let semi = value.firstIndex(of: ";") {
+                value = String(value[..<semi])
+            }
+            // Remove optional quotes
+            value = value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
 }
 
 extension NCViewerRichDocument: UINavigationControllerDelegate {
@@ -370,7 +403,7 @@ extension NCViewerRichDocument: UINavigationControllerDelegate {
         Task {
             if parent == nil {
                 await NCNetworking.shared.transferDispatcher.notifyAllDelegates { delegate in
-                    delegate.transferReloadData(serverUrl: metadata.serverUrl, requestData: false, status: nil)
+                    delegate.transferReloadDataSource(serverUrl: self.metadata.serverUrl, requestData: false, status: nil)
                 }
             }
         }
@@ -378,6 +411,12 @@ extension NCViewerRichDocument: UINavigationControllerDelegate {
 }
 
 extension NCViewerRichDocument: NCTransferDelegate {
+    func transferReloadData(serverUrl: String?) { }
+
+    func transferReloadDataSource(serverUrl: String?, requestData: Bool, status: Int?) { }
+
+    func transferProgressDidUpdate(progress: Float, totalBytes: Int64, totalBytesExpected: Int64, fileName: String, serverUrl: String) { }
+
     func transferChange(status: String,
                         account: String,
                         fileName: String,

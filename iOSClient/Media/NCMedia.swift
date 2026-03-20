@@ -52,13 +52,15 @@ class NCMedia: UIViewController {
     var numberOfColumns: Int = 0
     var lastNumberOfColumns: Int = 0
 
-    let debouncer = NCDebouncer(maxEventCount: 10)
+    let debouncerLoadDataSource = NCDebouncer(maxEventCount: 10)
+    let debouncerSearch = NCDebouncer(maxEventCount: 10)
 
     @MainActor
     var session: NCSession.Session {
         NCSession.shared.getSession(controller: tabBarController)
     }
 
+    @MainActor
     var controller: NCMainTabBarController? {
         self.tabBarController as? NCMainTabBarController
     }
@@ -71,6 +73,7 @@ class NCMedia: UIViewController {
         return pinchGesture.state == .began || pinchGesture.state == .changed
     }
 
+    @MainActor
     var sceneIdentifier: String {
         (self.tabBarController as? NCMainTabBarController)?.sceneIdentifier ?? ""
     }
@@ -97,7 +100,7 @@ class NCMedia: UIViewController {
 
         layout.sectionInset = UIEdgeInsets(top: 0, left: 2, bottom: 0, right: 2)
         collectionView.collectionViewLayout = layout
-        layoutType = database.getLayoutForView(account: session.account, key: global.layoutViewMedia, serverUrl: "", layout: global.mediaLayoutRatio).layout
+        layoutType = database.getLayoutForView(account: session.account, key: global.layoutViewMedia, serverUrl: "", layoutType: global.mediaLayoutRatio).layout
 
         // Gradient Layer
         gradientLayer.startPoint = CGPoint(x: 0, y: 0)
@@ -282,7 +285,7 @@ extension NCMedia: UIScrollViewDelegate {
 // MARK: -
 
 extension NCMedia: NCSelectDelegate {
-    func dismissSelect(serverUrl: String?, metadata: tableMetadata?, type: String, items: [Any], overwrite: Bool, copy: Bool, move: Bool, session: NCSession.Session) {
+    func dismissSelect(serverUrl: String?, metadata: tableMetadata?, type: String, items: [Any], overwrite: Bool, copy: Bool, move: Bool, session: NCSession.Session, controller: NCMainTabBarController?) {
         guard let serverUrl else { return }
 
         Task {

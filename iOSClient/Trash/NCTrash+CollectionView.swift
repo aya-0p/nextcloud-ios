@@ -1,25 +1,6 @@
-//
-//  NCTrash+CollectionView.swift
-//  Nextcloud
-//
-//  Created by Henrik Storch on 18.01.22.
-//  Copyright © 2022 Henrik Storch. All rights reserved.
-//
-//  Author Henrik Storch <henrik.storch@nextcloud.com>
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//
+// SPDX-FileCopyrightText: Nextcloud GmbH
+// SPDX-FileCopyrightText: 2018 Marino Faggiana
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 import UIKit
 import RealmSwift
@@ -69,7 +50,17 @@ extension NCTrash: UICollectionViewDataSource {
             gridCell.delegate = self
             cell = gridCell
         }
+
         guard let resultTableTrash = datasource?[indexPath.item] else { return cell }
+
+        let contextMenu = NCContextMenuTrash(objectId: resultTableTrash.fileId, trashController: self)
+        if let listCell = cell as? NCTrashListCell {
+            listCell.buttonMore.menu = contextMenu.viewMenu()
+            listCell.buttonMore.showsMenuAsPrimaryAction = true
+        } else if let gridCell = cell as? NCTrashGridCell {
+            gridCell.buttonMore.menu = contextMenu.viewMenu()
+            gridCell.buttonMore.showsMenuAsPrimaryAction = true
+        }
 
         cell.imageItem.contentMode = .scaleAspectFit
 

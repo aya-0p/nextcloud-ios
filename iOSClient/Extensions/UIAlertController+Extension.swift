@@ -24,20 +24,21 @@
 import Foundation
 import UIKit
 import NextcloudKit
+import LucidBanner
 
 extension UIAlertController {
     /// Creates a alert controller with a textfield, asking to create a new folder
     /// - Parameters:
     ///   - serverUrl: Server url of the location where the folder should be created
     ///   - urlBase: UrlBase object
-    ///   - completion: If not` nil` it overrides the default behavior which shows an error using `NCContentPresenter`
+    ///   - completion: If not` nil` it overrides the default behavior which shows an error
     /// - Returns: The presentable alert controller
-    static func createFolder(serverUrl: String,
-                             session: NCSession.Session,
-                             markE2ee: Bool = false,
-                             sceneIdentifier: String? = nil,
-                             capabilities: NKCapabilities.Capabilities,
-                             completion: ((_ error: NKError) -> Void)? = nil) -> UIAlertController {
+    static func createFolderWith(serverUrl: String,
+                                 session: NCSession.Session,
+                                 markE2ee: Bool = false,
+                                 sceneIdentifier: String? = nil,
+                                 capabilities: NKCapabilities.Capabilities,
+                                 completion: ((_ error: NKError) -> Void)? = nil) -> UIAlertController {
         let alertController = UIAlertController(title: NSLocalizedString("_create_folder_", comment: ""), message: nil, preferredStyle: .alert)
         let isDirectoryEncrypted = NCUtilityFileSystem().isDirectoryE2EE(serverUrl: serverUrl, urlBase: session.urlBase, userId: session.userId, account: session.account)
 
@@ -46,41 +47,46 @@ extension UIAlertController {
 
             if markE2ee {
                 if NCNetworking.shared.isOffline {
-                    return NCContentPresenter().showInfo(error: NKError(errorCode: NCGlobal.shared.errorInternalError, errorDescription: "_offline_not_allowed_"))
+                    completion?(NKError(errorCode: NCGlobal.shared.errorOfflineNotAllowed, errorDescription: "_offline_not_allowed_"))
+                    return
                 }
                 Task {
                     let serverUrlFileName = NCUtilityFileSystem().createServerUrl(serverUrl: serverUrl, fileName: fileNameFolder)
                     let createFolderResults = await NextcloudKit.shared.createFolderAsync(serverUrlFileName: serverUrlFileName, account: session.account) { task in
                         Task {
-                            let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(account: session.account,
-                                                                                                        path: serverUrlFileName,
-                                                                                                        name: "createFolder")
+                            let identifier = await NCNetworking.shared.networkingTasks.createIdentifier(
+                                account: session.account,
+                                path: serverUrlFileName,
+                                name: "createFolder"
+                            )
                             await NCNetworking.shared.networkingTasks.track(identifier: identifier, task: task)
                         }
                     }
                     if createFolderResults.error == .success {
                         let error = await NCNetworkingE2EEMarkFolder().markFolderE2ee(account: session.account, serverUrlFileName: serverUrlFileName, userId: session.userId)
-                        if error != .success {
-                            NCContentPresenter().showError(error: error)
-                        }
+                        completion?(error)
                     } else {
-                        NCContentPresenter().showError(error: createFolderResults.error)
+                        completion?(NKError(errorCode: createFolderResults.error.errorCode, errorDescription: createFolderResults.error.errorDescription))
                     }
                 }
             } else if isDirectoryEncrypted {
-                if NCNetworking.shared.isOffline {
-                    return NCContentPresenter().showInfo(error: NKError(errorCode: NCGlobal.shared.errorInternalError, errorDescription: "_offline_not_allowed_"))
-                }
                 Task {
-                    await NCNetworkingE2EECreateFolder().createFolder(fileName: fileNameFolder, serverUrl: serverUrl, sceneIdentifier: sceneIdentifier, session: session)
+                    if NCNetworking.shared.isOffline {
+                        completion?(NKError(errorCode: NCGlobal.shared.errorOfflineNotAllowed, errorDescription: "_offline_not_allowed_"))
+                        return
+                    }
+
+                    let error = await NCNetworkingE2EECreateFolder().createFolder(fileName: fileNameFolder, serverUrl: serverUrl, sceneIdentifier: sceneIdentifier, session: session)
+
+                    completion?(error)
                 }
             } else {
-                #if EXTENSION
+#if EXTENSION
                 Task {
                     let error = await NCNetworking.shared.createFolder(fileName: fileNameFolder, serverUrl: serverUrl, overwrite: false, session: session)
                     completion?(error)
                 }
-                #else
+#else
                 var metadata = tableMetadata()
 
                 if let result = NCManageDatabase.shared.getMetadata(predicate: NSPredicate(format: "account == %@ AND serverUrl == %@ AND fileNameView == %@", session.account, serverUrl, fileNameFolder)) {
@@ -98,6 +104,16 @@ extension UIAlertController {
                 metadata.sessionDate = Date()
 
                 NCManageDatabase.shared.addMetadata(metadata)
+
+                Task {
+                    // START Networking Process
+                    NotificationCenter.default.postOnGlobalThread(name: NCGlobal.shared.notificationCenterNetworkingProcess)
+
+                    // RELOAD
+                    await NCNetworking.shared.transferDispatcher.notifyAllDelegates { delegate in
+                        delegate.transferReloadDataSource(serverUrl: metadata.serverUrl, requestData: false, status: NCGlobal.shared.metadataStatusWaitCreateFolder)
+                    }
+                }
 #endif
             }
         })
@@ -146,6 +162,7 @@ extension UIAlertController {
 
         alertController.addAction(cancelAction)
         alertController.addAction(okAction)
+
         return alertController
     }
 
@@ -170,7 +187,7 @@ extension UIAlertController {
         }, completion: completion)
     }
 
-    static func deleteFileOrFolder(titleString: String, message: String?, canDeleteServer: Bool, selectedMetadatas: [tableMetadata], sceneIdentifier: String?, completion: @escaping (_ cancelled: Bool) -> Void) -> UIAlertController {
+    static func alertDeleteFileOrFolder(titleString: String, message: String?, canDeleteServer: Bool, metadatas: [tableMetadata], completion: @escaping (_ cancelled: Bool) -> Void) -> UIAlertController {
         let alertController = UIAlertController(
             title: titleString,
             message: message,
@@ -178,23 +195,20 @@ extension UIAlertController {
         if canDeleteServer {
             alertController.addAction(UIAlertAction(title: NSLocalizedString("_yes_", comment: ""), style: .destructive) { (_: UIAlertAction) in
                 Task {
-                    await NCNetworking.shared.setStatusWaitDelete(metadatas: selectedMetadatas, sceneIdentifier: sceneIdentifier)
+                    await NCNetworking.shared.setStatusWaitDelete(metadatas: metadatas)
                 }
                 completion(false)
             })
         }
 
-        #if !EXTENSION
         alertController.addAction(UIAlertAction(title: NSLocalizedString("_remove_local_file_", comment: ""), style: .default) { (_: UIAlertAction) in
             Task {
-                var error = NKError()
-                for metadata in selectedMetadatas where error == .success {
-                    error = await NCNetworking.shared.deleteCache(metadata, sceneIdentifier: sceneIdentifier)
+                for metadata in metadatas {
+                    await NCNetworking.shared.deleteCache(metadata)
                 }
             }
             completion(false)
         })
-        #endif
 
         alertController.addAction(UIAlertAction(title: NSLocalizedString("_cancel_", comment: ""), style: .cancel) { (_: UIAlertAction) in
             completion(true)

@@ -7,6 +7,7 @@ import CoreLocation
 import NextcloudKit
 import Photos
 import OrderedCollections
+import LucidBanner
 
 class NCAutoUpload: NSObject {
     static let shared = NCAutoUpload()
@@ -41,19 +42,29 @@ class NCAutoUpload: NSObject {
                                         model: NCAutoUploadModel,
                                         assetCollections: [PHAssetCollection],
                                         account: String) async {
+        let windowScene = SceneManager.shared.getWindowScene(controller: controller)
+        var banner: LucidBanner?
         defer {
-            NCContentPresenter().dismiss(after: 1)
+            if let banner {
+                banner.dismiss()
+            }
         }
 
         guard let tblAccount = await self.database.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", account)) else {
             return
         }
 
-        NCContentPresenter().noteTop(text: NSLocalizedString("_creating_db_photo_progress_", comment: ""),
-                                     image: UIImage(systemName: "photo.on.rectangle.angled")?.image(color: .white, size: 20),
-                                     color: .lightGray,
-                                     delay: .infinity,
-                                     priority: .max)
+        (banner, _) = await showBanner(windowScene: windowScene,
+                                       title: "_info_",
+                                       subtitle: "_creating_db_photo_progress_",
+                                       textColor: .label,
+                                       image: "photo.on.rectangle.angled",
+                                       imageAnimation: .bounce,
+                                       imageColor: .label,
+                                       backgroundColor: UIColor.lightGray.withAlphaComponent(0.75),
+                                       autoDismissAfter: 0,
+                                       swipeToDismiss: false
+        )
 
         let result = await getCameraRollAssets(controller: controller, assetCollections: assetCollections, tblAccount: tblAccount)
 
@@ -77,6 +88,8 @@ class NCAutoUpload: NSObject {
                               tblAccount: tableAccount,
                               assets: [PHAsset],
                               fileNames: [String]) async -> Int {
+        let capabilities = await NKCapabilities.shared.getCapabilities(for: tblAccount.account)
+        let autoMkcol = capabilities.serverVersionMajor >= NCGlobal.shared.nextcloudVersion33
         let session = NCSession.shared.getSession(account: tblAccount.account)
         let autoUploadServerUrlBase = await self.database.getAccountAutoUploadServerUrlBaseAsync(account: tblAccount.account, urlBase: tblAccount.urlBase, userId: tblAccount.userId)
         var metadatas: [tableMetadata] = []
@@ -156,11 +169,15 @@ class NCAutoUpload: NSObject {
         }
 
         if !metadatas.isEmpty {
-            let metadatasFolder = await NCManageDatabaseCreateMetadata().createMetadatasFolderAsync(
-                assets: assets,
-                useSubFolder: tblAccount.autoUploadCreateSubfolder,
-                session: session)
-            await self.database.addMetadatasAsync(metadatasFolder + metadatas)
+            if autoMkcol {
+                await self.database.addMetadatasAsync(metadatas)
+            } else {
+                let metadatasFolder = await NCManageDatabaseCreateMetadata().createMetadatasFolderAsync(
+                    assets: assets,
+                    useSubFolder: tblAccount.autoUploadCreateSubfolder,
+                    session: session)
+                await self.database.addMetadatasAsync(metadatasFolder + metadatas)
+            }
         }
 
         return metadatas.count

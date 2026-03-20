@@ -74,10 +74,10 @@ class NCAccount: NSObject {
             controller.modalPresentationStyle = .fullScreen
             controller.view.alpha = 0
 
-            UIApplication.shared.firstWindow?.rootViewController = controller
-            UIApplication.shared.firstWindow?.makeKeyAndVisible()
+            UIApplication.shared.mainAppWindow?.rootViewController = controller
+            UIApplication.shared.mainAppWindow?.makeKeyAndVisible()
 
-            if let scene = UIApplication.shared.firstWindow?.windowScene {
+            if let scene = UIApplication.shared.mainAppWindow?.windowScene {
                 SceneManager.shared.register(scene: scene, withRootViewController: controller)
             }
 
@@ -193,8 +193,8 @@ class NCAccount: NSObject {
         guard let tblAccount = await NCManageDatabase.shared.getTableAccountAsync(predicate: NSPredicate(format: "account == %@", account)) else {
             return
         }
-
-        NCContentPresenter().showCustomMessage(title: "", message: String(format: NSLocalizedString("_account_unauthorized_", comment: ""), account), priority: .high, delay: global.dismissAfterSecondLong, type: .error)
+        let windowScene = SceneManager.shared.getWindowScene(controller: controller)
+        await showErrorBanner(windowScene: windowScene, text: String(format: NSLocalizedString("_account_unauthorized_", comment: ""), account), errorCode: NCGlobal.shared.errorUnauthorized401)
 
         let resultsWipe = await NextcloudKit.shared.getRemoteWipeStatusAsync(serverUrl: tblAccount.urlBase, token: token, account: account) { task in
             Task {

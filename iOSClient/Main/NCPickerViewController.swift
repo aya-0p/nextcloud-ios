@@ -11,11 +11,16 @@ import SwiftUI
 
 // MARK: - Photo Picker
 
+@MainActor
 class NCPhotosPickerViewController: NSObject {
     var controller: NCMainTabBarController
     var maxSelectedAssets = 1
     var singleSelectedMode = false
     let global = NCGlobal.shared
+
+    var windowScene: UIWindowScene? {
+        SceneManager.shared.getWindowScene(controller: controller)
+    }
 
     @discardableResult
     init(controller: NCMainTabBarController, maxSelectedAssets: Int, singleSelectedMode: Bool) {
@@ -59,18 +64,21 @@ class NCPhotosPickerViewController: NSObject {
         }, didCancel: nil)
 
         pickerVC?.didExceedMaximumNumberOfSelection = { _ in
-            let error = NKError(errorCode: self.global.errorInternalError, errorDescription: "_limited_dimension_")
-            NCContentPresenter().showError(error: error)
+            Task {
+                await showErrorBanner(windowScene: self.windowScene, text: "_limited_dimension_", errorCode: NCGlobal.shared.errorInternalError)
+            }
         }
 
         pickerVC?.handleNoAlbumPermissions = { _ in
-            let error = NKError(errorCode: self.global.errorInternalError, errorDescription: "_denied_album_")
-            NCContentPresenter().showError(error: error)
+            Task {
+                await showErrorBanner(windowScene: self.windowScene, text: "_denied_album_", errorCode: NCGlobal.shared.errorForbidden)
+            }
         }
 
         pickerVC?.handleNoCameraPermissions = { _ in
-            let error = NKError(errorCode: self.global.errorInternalError, errorDescription: "_denied_camera_")
-            NCContentPresenter().showError(error: error)
+            Task {
+                await showErrorBanner(windowScene: self.windowScene, text: "_denied_camera_", errorCode: NCGlobal.shared.errorForbidden)
+            }
         }
 
         pickerVC?.configure = configure

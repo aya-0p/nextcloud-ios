@@ -23,10 +23,9 @@
 
 import UIKit
 import NextcloudKit
-import SVGKit
 import CloudKit
 
-class NCShareAdvancePermission: UITableViewController, NCShareAdvanceFotterDelegate, NCShareNavigationTitleSetting {
+class NCShareAdvancePermission: UITableViewController, NCShareAdvanceFooterDelegate, NCShareNavigationTitleSetting {
     let database = NCManageDatabase.shared
 
     var oldTableShare: tableShare?
@@ -52,9 +51,15 @@ class NCShareAdvancePermission: UITableViewController, NCShareAdvanceFotterDeleg
     /// This can only be created after the share has been actually created due to its requirement of the share token provided by the server.
     ///
     var downloadLimit: DownloadLimitViewModel = .unlimited
+    var downloadLimitChanged: Bool = false
 
     var shareConfig: NCShareConfig!
     var networking: NCShareNetworking?
+
+    var controller: NCMainTabBarController?
+    var windowScene: UIWindowScene? {
+        SceneManager.shared.getWindowScene(controller: controller)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -108,7 +113,7 @@ class NCShareAdvancePermission: UITableViewController, NCShareAdvanceFotterDeleg
         guard let headerView = (Bundle.main.loadNibNamed("NCShareHeader", owner: self, options: nil)?.first as? NCShareHeader) else { return }
         headerView.setupUI(with: metadata)
 
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: view.frame.width, height: 220))
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: view.frame.width, height: 200))
         container.addSubview(headerView)
         tableView.tableHeaderView = container
         headerView.translatesAutoresizingMaskIntoConstraints = false
@@ -244,23 +249,25 @@ class NCShareAdvancePermission: UITableViewController, NCShareAdvanceFotterDeleg
                 let capabilities = await NKCapabilities.shared.getCapabilities(for: metadata.account)
 
                 if share.shareType != NKShare.ShareType.publicLink.rawValue, metadata.e2eEncrypted,
-                   capabilities.e2EEApiVersion == NCGlobal.shared.e2eeVersionV20 {
+                   NCGlobal.shared.isE2eeVersion2(capabilities.e2EEApiVersion) {
 
                     if await NCNetworkingE2EE().isInUpload(account: metadata.account, serverUrl: metadata.serverUrlFileName) {
-                        let error = NKError(errorCode: NCGlobal.shared.errorE2EEUploadInProgress, errorDescription: NSLocalizedString("_e2e_in_upload_", comment: ""))
-                        return NCContentPresenter().showInfo(error: error)
+                        await showErrorBanner(windowScene: windowScene,
+                                              text: "_e2e_in_upload_",
+                                              errorCode: NCGlobal.shared.errorE2EEUploadInProgress)
+                        return
                     }
 
                     let error = await NCNetworkingE2EE().uploadMetadata(serverUrl: metadata.serverUrlFileName, addUserId: share.shareWith, removeUserId: nil, account: metadata.account)
 
                     if error != .success {
-                        return NCContentPresenter().showError(error: error)
+                        await showErrorBanner(windowScene: windowScene, error: error)
                     }
                 }
 
                 networking?.createShare(share, downloadLimit: self.downloadLimit)
             } else {
-                networking?.updateShare(share, downloadLimit: self.downloadLimit)
+                networking?.updateShare(share, downloadLimit: self.downloadLimit, changeDownloadLimit: downloadLimitChanged)
             }
         }
 
@@ -273,5 +280,6 @@ class NCShareAdvancePermission: UITableViewController, NCShareAdvanceFotterDeleg
 extension NCShareAdvancePermission: NCShareDownloadLimitTableViewControllerDelegate {
     func didSetDownloadLimit(_ downloadLimit: DownloadLimitViewModel) {
         self.downloadLimit = downloadLimit
+        self.downloadLimitChanged = true
     }
 }

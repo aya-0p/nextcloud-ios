@@ -34,7 +34,10 @@ extension NCShare: NCShareLinkCellDelegate, NCShareUserCellDelegate {
                 let internalLink = metadata.urlBase + "/index.php/f/" + metadata.fileId
                 NCShareCommon.copyLink(link: internalLink, viewController: self, sender: sender)
             } else {
-                NCContentPresenter().showError(error: error)
+                Task {
+                    let windowScene = SceneManager.shared.getWindowScene(controller: self.controller)
+                    await showErrorBanner(windowScene: windowScene, error: error)
+                }
             }
         }
     }
@@ -47,20 +50,20 @@ extension NCShare: NCShareLinkCellDelegate, NCShareUserCellDelegate {
     }
 
     func tapMenu(with tableShare: tableShare?, sender: Any) {
-        if let tableShare = tableShare {
-            self.toggleShareMenu(for: tableShare, sender: sender)
-        } else {
+        // Menu is now shown via native context menu on the button
+        // Only handle the case where there's no tableShare (add new link)
+        if tableShare == nil {
             self.makeNewLinkShare()
         }
     }
 
-    func showProfile(with tableShare: tableShare?, sender: Any) {
-        guard let tableShare else { return }
-        showProfileMenu(userId: tableShare.shareWith, session: session, sender: sender)
+    func tapProfileMenu(with tableShare: tableShare?) -> UIMenu? {
+        guard let tableShare else { return nil }
+        return NCContextMenuProfile(userId: tableShare.shareWith, session: session, viewController: self).viewMenu()
     }
 
-    func quickStatus(with tableShare: tableShare?, sender: Any) {
-        guard let tableShare, let metadata else { return }
-        self.toggleQuickPermissionsMenu(isDirectory: metadata.directory, share: tableShare, sender: sender)
+    func tapQuickStatus(with tableShare: tableShare?, sender: Any) {
+        guard let tableShare else { return }
+        presentQuickStatusActionSheet(for: tableShare, sender: sender)
     }
 }

@@ -31,14 +31,19 @@ class NCMainTabBarController: UITabBarController {
         return SceneManager.shared.getWindow(controller: self)
     }
 
+    var barHeightBottom: CGFloat {
+        return tabBar.frame.height - tabBar.safeAreaInsets.bottom
+    }
+
+    var barHeightTop: CGFloat {
+        return tabBar.frame.height - tabBar.safeAreaInsets.top
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         delegate = self
 
-        NCNetworking.shared.controller = self
-        NCImageCache.shared.controller = self
-
-        NCDownloadAction.shared.setup(sceneIdentifier: sceneIdentifier)
+        NCNetworking.shared.setupScene(sceneIdentifier: sceneIdentifier, controller: self)
 
         tabBar.tintColor = NCBrandColor.shared.getElement(account: account)
 
@@ -118,7 +123,7 @@ class NCMainTabBarController: UITabBarController {
         previousIndex = selectedIndex
 
         if NCBrandOptions.shared.enforce_passcode_lock && NCPreferences().passcode.isEmptyOrNil {
-            let vc = UIHostingController(rootView: SetupPasscodeView(isLockActive: .constant(false)))
+            let vc = UIHostingController(rootView: SetupPasscodeView(isLockActive: .constant(false), controller: self))
             vc.isModalInPresentation = true
 
             present(vc, animated: true)
@@ -127,28 +132,15 @@ class NCMainTabBarController: UITabBarController {
 
     @MainActor
     private func timerCheck() async {
-        let nanoseconds: UInt64 = 3_000_000_000
-
         while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: nanoseconds)
+            try? await Task.sleep(for: .seconds(3))
 
             guard isViewLoaded, view.window != nil else {
                 continue
             }
 
-            let capabilities = await NKCapabilities.shared.getCapabilities(for: self.account)
-
             // Check error
             await NCNetworking.shared.checkServerError(account: self.account, controller: self)
-
-            // Update right bar button item
-            if let navigationController = self.selectedViewController as? NCMainNavigationController {
-                await navigationController.updateRightBarButtonItems(self.tabBar.items?[0])
-            }
-            // Update Activity tab bar
-            if let item = self.tabBar.items?[3] {
-                item.isEnabled = capabilities.activityEnabled
-            }
         }
     }
 
