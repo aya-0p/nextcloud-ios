@@ -35,27 +35,28 @@ jobs:
         xcodebuild build-for-testing \
         -scheme "${{ env.SCHEME }}" \
         -destination "${{ env.DESTINATION }}" \
-        -derivedDataPath "DerivedData" \
+        -sdk iphoneos \
+        -derivedDataPath build \
         | xcbeautify --quieter
 
     - name: Copy Runner.app
       run: |
+        APP_PATH=$(find build -name "*.app" -type d | head -n 1)
         mkdir Payload
-        cp -R build/ios/iphoneos/Runner.app Payload
+        cp -R "$APP_PATH" Payload
 
     - name: Create IPA (Unsigned)
-      run: zip -r nextcloud-${{ github.ref_name }}.ipa Payload
+      run: zip -r nextcloud.ipa Payload
 
     - name: Upload IPA (Unsigned)
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: IPA
-        path: nextcloud-${{ github.ref_name }}.ipa
+        path: nextcloud.ipa
 
     - name: Release IPA (Unsigned)
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
       with:
-        files: nextcloud-${{ github.ref_name }}.ipa
+        files: nextcloud.ipa
         draft: true
-
