@@ -241,7 +241,8 @@ class NCContextMenuMain: NSObject {
                 let error = await NCNetworkingE2EEMarkFolder().markFolderE2ee(
                     account: metadata.account,
                     serverUrlFileName: metadata.serverUrlFileName,
-                    userId: metadata.userId
+                    userId: metadata.userId,
+                    sceneIdentifier: self.sceneIdentifier
                 )
                 if error != .success {
                     await showErrorBanner(windowScene: self.windowScene, text: error.errorDescription, errorCode: error.errorCode)
@@ -283,7 +284,6 @@ class NCContextMenuMain: NSObject {
                     await (self.viewController as? NCCollectionViewCommon)?.reloadDataSource()
                 } else {
                     await showErrorBanner(windowScene: self.windowScene,
-                                          title: "_e2e_error_",
                                           text: results.error.errorDescription,
                                           errorCode: results.error.errorCode)
                 }
@@ -364,7 +364,7 @@ class NCContextMenuMain: NSObject {
                     return
                 }
 
-                let error = await NCNetworking.shared.setStatusWaitRename(metadata, fileNameNew: fileNameNew)
+                let error = await NCNetworking.shared.setStatusWaitRename(metadata, fileNameNew: fileNameNew, windowScene: self.windowScene)
                 if error != .success {
                     await showErrorBanner(windowScene: self.windowScene, error: error)
                 }
@@ -412,9 +412,17 @@ class NCContextMenuMain: NSObject {
         ) { _ in
             if let picker = UIStoryboard(name: "NCColorPicker", bundle: nil)
                 .instantiateInitialViewController() as? NCColorPicker {
-
-                picker.metadata = metadata
-                picker.collectionViewCommon = self.viewController as? NCFiles
+                if let tableDirectory = NCManageDatabase.shared.getTableDirectory(
+                    predicate: NSPredicate(format: "account == %@ AND serverUrl == %@", metadata.account, metadata.serverUrlFileName)
+                ), let hex = tableDirectory.colorFolder, let color = UIColor(hex: hex) {
+                    picker.selectedColor = color
+                }
+                picker.onColorSelected = { [weak self] hexColor in
+                    Task { @MainActor in
+                        await NCManageDatabase.shared.updateDirectoryColorFolderAsync(hexColor, metadata: metadata, serverUrl: metadata.serverUrlFileName)
+                        (self?.viewController as? NCFiles)?.collectionView.reloadData()
+                    }
+                }
                 let popup = NCPopupViewController(
                     contentController: picker,
                     popupWidth: 200,
