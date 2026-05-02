@@ -51,11 +51,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
         UserDefaults.standard.register(defaults: ["UserAgent": userAgent])
 
-        #if !DEBUG
         if !NCPreferences().disableCrashservice, !NCBrandOptions.shared.disable_crash_service {
             FirebaseApp.configure()
         }
-        #endif
 
         NCBrandColor.shared.createUserColors()
 
@@ -206,10 +204,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
 
     func nextcloudPushNotificationAction(data: [String: AnyObject]) {
-        guard let data = NCApplicationHandle().nextcloudPushNotificationAction(data: data)
-        else {
-            return
-        }
         let account = data["account"] as? String ?? "unavailable"
         let app = data["app"] as? String
 
@@ -309,8 +303,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // MARK: - Universal Links
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        let applicationHandle = NCApplicationHandle()
-        return applicationHandle.applicationOpenUserActivity(userActivity)
+        return false
     }
 }
 
