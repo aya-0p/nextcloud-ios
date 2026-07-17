@@ -8,13 +8,10 @@ import NextcloudKit
 // MARK: - Media Viewer Page View
 
 struct NCMediaViewerPageView: View {
+    @ObservedObject var model: NCMediaViewerModel
+    @ObservedObject var page: NCMediaViewerPageModel
 
-    // MARK: - Properties
-
-    let page: NCMediaViewerPageModel
-    let isChromeHidden: Bool
     let onToggleChrome: () -> Void
-    let isSelected: Bool
 
     let canGoPrevious: Bool
     let canGoNext: Bool
@@ -23,9 +20,14 @@ struct NCMediaViewerPageView: View {
     let onNextPage: (_ shouldAutoPlay: Bool) -> Void
     let onClose: (_ ocId: String?) -> Void
     let onAutoPlayConsumed: () -> Void
+    let onZoomChanged: (Bool) -> Void
 
     let contextMenuController: NCMainTabBarController?
     let navigationBar: UINavigationBar?
+
+    private var isSelected: Bool {
+        model.selectedIndex == page.index
+    }
 
     // MARK: - Body
 
@@ -95,7 +97,7 @@ struct NCMediaViewerPageView: View {
     private var backgroundStyle: NCViewerBackgroundStyle {
         ncViewerBackgroundStyle(
             for: page.metadata,
-            isChromeHidden: isChromeHidden
+            isChromeHidden: model.isChromeHidden
         )
     }
 
@@ -187,8 +189,7 @@ struct NCMediaViewerPageView: View {
                 backgroundStyle: backgroundStyle
             )
         } else {
-            Color.ncViewerBackground(backgroundStyle)
-                .ignoresSafeArea()
+            imagePlaceholderView
         }
     }
 
@@ -203,7 +204,7 @@ struct NCMediaViewerPageView: View {
                 localURL: localURL,
                 previewURL: previewURL,
                 isSelected: isSelected,
-                isChromeHidden: isChromeHidden,
+                isChromeHidden: model.isChromeHidden,
                 contextMenuController: contextMenuController,
                 navigationBar: navigationBar,
                 canGoPrevious: canGoPrevious,
@@ -263,15 +264,17 @@ struct NCMediaViewerPageView: View {
             }
 
         case NKTypeClassFile.audio.rawValue:
-            Color.ncViewerBackground(backgroundStyle)
-                .ignoresSafeArea()
+            if let previewURL {
+                previewOnlyView(previewURL: previewURL)
+            } else {
+                audioPlaceholderView
+            }
 
         default:
             if let previewURL {
                 previewOnlyView(previewURL: previewURL)
             } else {
-                Color.ncViewerBackground(backgroundStyle)
-                    .ignoresSafeArea()
+                imagePlaceholderView
             }
         }
     }
@@ -315,10 +318,63 @@ struct NCMediaViewerPageView: View {
     ) -> some View {
         if let previewURL {
             previewOnlyView(previewURL: previewURL)
+        } else if page.metadata?.classFile == NKTypeClassFile.audio.rawValue {
+            audioPlaceholderView
         } else {
-            Color.ncViewerBackground(backgroundStyle)
-                .ignoresSafeArea()
+            unresolvedMediaPlaceholderView
         }
+    }
+
+    @ViewBuilder
+    private var unresolvedMediaPlaceholderView: some View {
+        switch page.metadata?.classFile {
+        case NKTypeClassFile.video.rawValue:
+            NCVideoPlaybackCoverView(
+                previewURL: nil,
+                isPlayEnabled: false,
+                isLaunchingPlayback: false,
+                onToggleChrome: onToggleChrome,
+                onPlay: { }
+            )
+        case NKTypeClassFile.audio.rawValue:
+            audioPlaceholderView
+        default:
+            imagePlaceholderView
+        }
+    }
+
+    private var imagePlaceholderView: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "photo")
+                .font(.system(size: 44, weight: .regular))
+
+            Text(page.metadata?.fileNameView ?? page.metadata?.fileName ?? "")
+                .font(.headline)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(primaryForegroundStyle)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .gesture(chromeToggleGesture())
+    }
+
+    private var audioPlaceholderView: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "waveform")
+                .font(.system(size: 44, weight: .regular))
+
+            Text(page.metadata?.fileNameView ?? page.metadata?.fileName ?? "")
+                .font(.headline)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(primaryForegroundStyle)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .gesture(chromeToggleGesture())
     }
 
     @ViewBuilder
@@ -335,7 +391,8 @@ struct NCMediaViewerPageView: View {
                 fullURL: localURL,
                 videoURL: livePhotoURL,
                 backgroundStyle: backgroundStyle,
-                topOverlayInset: livePhotoTopOverlayInset
+                topOverlayInset: livePhotoTopOverlayInset,
+                onZoomChanged: onZoomChanged
             )
             .background(Color.ncViewerBackground(backgroundStyle))
             .contentShape(Rectangle())
@@ -345,7 +402,8 @@ struct NCMediaViewerPageView: View {
                 identifier: page.ocId,
                 previewURL: previewURL,
                 fullURL: localURL,
-                backgroundStyle: backgroundStyle
+                backgroundStyle: backgroundStyle,
+                onZoomChanged: onZoomChanged
             )
             .contentShape(Rectangle())
             .gesture(chromeToggleGesture())
@@ -358,7 +416,8 @@ struct NCMediaViewerPageView: View {
             identifier: page.ocId,
             previewURL: previewURL,
             fullURL: nil,
-            backgroundStyle: backgroundStyle
+            backgroundStyle: backgroundStyle,
+            onZoomChanged: onZoomChanged
         )
         .contentShape(Rectangle())
         .gesture(chromeToggleGesture())

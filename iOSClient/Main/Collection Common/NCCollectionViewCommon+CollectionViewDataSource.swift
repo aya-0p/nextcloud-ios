@@ -75,23 +75,13 @@ extension NCCollectionViewCommon: UICollectionViewDataSource {
                     return
                 }
 
-                await NCUtility().createImageFileFrom(data: data,
-                                                      ocId: ocId,
-                                                      etag: etag,
-                                                      userId: self.session.userId,
-                                                      urlBase: self.session.urlBase)
-
-                let image = await NCUtility().getImage(
+                let image = await NCUtility().createImageFileFrom(
+                    data: data,
                     ocId: ocId,
                     etag: etag,
                     ext: ext,
                     userId: self.session.userId,
-                    urlBase: self.session.urlBase
-                )
-
-                guard !Task.isCancelled else {
-                    return
-                }
+                    urlBase: self.session.urlBase)
 
                 await MainActor.run {
                     guard let visibleIndexPath = self.collectionView.indexPathsForVisibleItems.first(where: {

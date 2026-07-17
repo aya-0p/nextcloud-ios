@@ -477,6 +477,9 @@ extension NCManageDatabase {
     }
 
     func addMetadatasAsync(_ metadatas: [tableMetadata]) async {
+        if metadatas.isEmpty {
+            return
+        }
         let detached = metadatas.map { $0.detachedCopy() }
 
         await core.performRealmWriteAsync { realm in
@@ -666,19 +669,6 @@ extension NCManageDatabase {
                 result.serverUrlFileName = NCUtilityFileSystem().createServerUrl(serverUrl: result.serverUrl, fileName: result.fileName)
                 result.status = NCGlobal.shared.metadataStatusNormal
                 result.sessionDate = nil
-            }
-        }
-    }
-
-    func setMetadataLivePhotoByServerAsync(account: String,
-                                           ocId: String,
-                                           livePhotoFile: String) async {
-        await core.performRealmWriteAsync { realm in
-            if let result = realm.objects(tableMetadata.self)
-                .filter("account == %@ AND ocId == %@", account, ocId)
-                .first {
-                result.isFlaggedAsLivePhotoByServer = true
-                result.livePhotoFile = livePhotoFile
             }
         }
     }
@@ -1019,7 +1009,7 @@ extension NCManageDatabase {
                 .sorted(byKeyPath: sortedByKeyPath,
                         ascending: ascending)
 
-            if let limit {
+            if let limit, limit > 0 {
                 let sliced = results.prefix(limit)
                 return sliced.map { $0.detachedCopy() }
             } else {
@@ -1351,6 +1341,23 @@ extension NCManageDatabase {
                 .first
             return object?.detachedCopy()
         }
+    }
+
+    /// Returns detached (unmanaged) copies of `tableMetadata` objects matching the provided ocIds.
+    /// - Parameter fileIds: Array of fileId strings used to fetch corresponding metadata.
+    /// - Returns: An array of detached `tableMetadata` objects. Empty if no matches are found.
+    func getMetadatasFromFileIdsAsync(_ fileIds: [String]) async -> [tableMetadata] {
+        guard !fileIds.isEmpty else {
+            return []
+        }
+
+        return await core.performRealmReadAsync { realm in
+            realm.objects(tableMetadata.self)
+                .where {
+                    $0.fileId.in(fileIds)
+                }
+                .map { $0.detachedCopy() }
+        } ?? []
     }
 
 #if !EXTENSION_FILE_PROVIDER_EXTENSION

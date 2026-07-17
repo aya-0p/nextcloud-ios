@@ -130,7 +130,7 @@ final class NCGlobal: Sendable {
     //
     let errorNotModified: Int                   = 304
     let errorBadRequest: Int                    = 400
-    let errorUnauthorized401: Int               = 401
+    let errorUnauthorized: Int                  = 401
     let errorForbidden: Int                     = 403
     let errorResourceNotFound: Int              = 404
     let errorMethodNotSupported: Int            = 405
@@ -159,27 +159,31 @@ final class NCGlobal: Sendable {
     let errorVersionMismatch: Int               = -99989
     let errorNCSessionNotFound: Int             = -99988
     let errorNotPermission: Int                 = -99987
+    let errorTaskCancelled: Int                 = -99986
 
 
     // E2EE
     let errorE2EENotEnabled: Int                = -98000
     let errorE2EEVersion: Int                   = -98001
     let errorE2EEKeyChecksums: Int              = -98002
-    let errorE2EEKeyEncodeMetadata: Int         = -98003
-    let errorE2EEKeyDecodeMetadataV12: Int      = -98004
-    let errorE2EEKeyVerifySignature: Int        = -98005
-    let errorE2EEKeyCiphertext: Int             = -98006
-    let errorE2EEKeyFiledropCiphertext: Int     = -98007
-    let errorE2EEJSon: Int                      = -98008
-    let errorE2EELock: Int                      = -98009
-    let errorE2EEEncryptFile: Int               = -98010
-    let errorE2EEEncryptPayloadFile: Int        = -98011
-    let errorE2EECounter: Int                   = -98012
-    let errorE2EEGenerateKey: Int               = -98013
-    let errorE2EEEncodedKey: Int                = -98014
-    let errorE2EENoUserFound: Int               = -98015
-    let errorE2EEUploadInProgress: Int          = -98016
-    let errorE2EEKeyDirectoryTop: Int           = -98017
+    let errorE2EEKeyChecksumsEmpty: Int         = -98003
+    let errorE2EEKeyEncodeMetadata: Int         = -98004
+    let errorE2EEKeyDecodeMetadataV12: Int      = -98005
+    let errorE2EEKeyVerifySignature: Int        = -98006
+    let errorE2EEKeyVerifySignatureEmpty: Int   = -98007
+    let errorE2EEKeyCiphertext: Int             = -98008
+    let errorE2EEKeyFiledropCiphertext: Int     = -98009
+    let errorE2EEJSon: Int                      = -98010
+    let errorE2EELock: Int                      = -98011
+    let errorE2EEEncryptFile: Int               = -98012
+    let errorE2EEEncryptPayloadFile: Int        = -98013
+    let errorE2EECounter: Int                   = -98014
+    let errorE2EEGenerateKey: Int               = -98015
+    let errorE2EEEncodedKey: Int                = -98016
+    let errorE2EENoUserFound: Int               = -98017
+    let errorE2EEUploadInProgress: Int          = -98018
+    let errorE2EEKeyDirectoryTop: Int           = -98019
+    let errorE2EESendMetadata: Int              = -98020
 
 
     // Selector
@@ -384,8 +388,11 @@ final class NCGlobal: Sendable {
     let logTagDatabase                      = "DB"
     let logTagSpeedUpSyncMetadata           = "SYNC METADATA"
     let logTagNetworkingTasks               = "NETWORKING TASKS"
-    let logTagMetadataTransfers             = "METADATA TRANSFERS"
+    let logTagMetadataUploadTransfers       = "METADATA UPLOAD TRANSFERS"
+    let logTagMetadataDownloadTransfers     = "METADATA DOWNLOAD TRANSFERS"
     let logTagViewer                        = "VIEWERS"
+    let logTagMediaBackfill                 = "MEDIA BACKFILL"
+    let logTagMediaPlaceholder              = "MEDIA PLACEHOLDER"
 
     // USER DEFAULTS
     //
