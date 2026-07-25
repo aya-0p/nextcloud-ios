@@ -189,7 +189,7 @@ extension tableMetadata {
     }
 
     var isCopyableMovable: Bool {
-        !isDirectoryE2EE && !e2eEncrypted
+        !isDirectoryE2EE && !e2eEncrypted && NCMetadataPermissions.canMoveAndDelete(self)
     }
 
     var isModifiableWithQuickLook: Bool {
@@ -217,7 +217,7 @@ extension tableMetadata {
     }
 
     var isDeletable: Bool {
-        if (!isDirectoryE2EE && e2eEncrypted) || !NCMetadataPermissions.canDelete(self) {
+        if (!isDirectoryE2EE && e2eEncrypted) || !NCMetadataPermissions.canDelete(self) || !NCMetadataPermissions.canMoveAndDelete(self) {
             return false
         }
         return true
@@ -1574,6 +1574,63 @@ extension NCManageDatabase {
             }
         } ?? []
     }
+
+#if !EXTENSION
+    func getMediaCompactMetadatasAsync(
+        predicate: NSPredicate,
+        sortedByKeyPath: String,
+        ascending: Bool = false
+    ) async -> [NCMediaDataSource.NCCompactMetadata] {
+        await core.performRealmReadAsync { realm in
+            let results = realm.objects(tableMetadata.self)
+                .filter(predicate)
+                .sorted(
+                    byKeyPath: sortedByKeyPath,
+                    ascending: ascending
+                )
+
+            let allFileIds = Set(results.map(\.fileId))
+
+            var compactMetadatas: [NCMediaDataSource.NCCompactMetadata] = []
+            compactMetadatas.reserveCapacity(results.count)
+
+            for metadata in results {
+                let linkedFileId = metadata.livePhotoFile
+                let hasLivePhotoLink = !linkedFileId.isEmpty
+                let linkedTargetExists = allFileIds.contains(linkedFileId)
+
+                let isImage = metadata.classFile == NKTypeClassFile.image.rawValue
+                let isVideo = metadata.classFile == NKTypeClassFile.video.rawValue
+
+                if isVideo && hasLivePhotoLink {
+                    // Remove Live Photo videos, including orphaned ones.
+                    continue
+                }
+
+                let isLivePhoto = isImage &&
+                    hasLivePhotoLink &&
+                    linkedTargetExists
+
+                compactMetadatas.append(
+                    NCMediaDataSource.NCCompactMetadata(
+                        date: metadata.date as Date,
+                        etag: metadata.etag,
+                        imageSize: CGSize(
+                            width: metadata.width,
+                            height: metadata.height
+                        ),
+                        isImage: isImage,
+                        isLivePhoto: isLivePhoto,
+                        isVideo: isVideo,
+                        ocId: metadata.ocId
+                    )
+                )
+            }
+
+            return compactMetadatas
+        } ?? []
+    }
+#endif
 
     // MARK: - helpers
 
