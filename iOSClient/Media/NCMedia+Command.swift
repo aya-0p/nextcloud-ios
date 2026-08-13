@@ -24,7 +24,7 @@ extension NCMedia {
             }
         }
 
-        self.collectionView.reloadData()
+        collectionViewReloadData()
 
         Task {
             await (self.navigationController as? NCMainNavigationController)?.setNavigationLeftItems()
@@ -49,7 +49,7 @@ extension NCMedia {
 
         if lastVisibleDateRange?.first == firstIndexPath,
            lastVisibleDateRange?.last == lastIndexPath,
-           navigationItem.leftBarButtonItem === buttonDateBarItem {
+           navigationItem.leftBarButtonItems?.contains(where: { $0 === buttonDateBarItem }) == true {
             return
         }
 
@@ -194,8 +194,7 @@ extension NCMedia {
 
         collectionView.layoutIfNeeded()
 
-        lastCacheCenterIndex = nil
-        updateImageCacheWindow()
+        updateImageCacheWindow(force: true)
     }
 
     @MainActor
@@ -217,7 +216,7 @@ extension NCMedia {
 
         navigationItem.leftBarButtonItems = items.isEmpty ? nil : items
         if items.isEmpty {
-            collectionView.reloadData()
+            collectionViewReloadData()
         }
     }
 }
