@@ -424,7 +424,25 @@ struct NCMediaViewerPageView: View {
                 videoURL: livePhotoURL,
                 backgroundStyle: backgroundStyle,
                 topOverlayInset: livePhotoTopOverlayInset,
-                onZoomChanged: onZoomChanged
+                initialZoomState: page.imageZoomState,
+                onZoomChanged: onZoomChanged,
+                onZoomStateChanged: { page.imageZoomState = $0 },
+                requestResources: {
+                    guard let metadata = page.metadata else {
+                        return nil
+                    }
+
+                    return await model.downloadLivePhotoResources(
+                        for: metadata
+                    )
+                },
+                cancelResourceDownload: {
+                    guard let metadata = page.metadata else {
+                        return
+                    }
+
+                    model.cancelLivePhotoResourceDownload(for: metadata)
+                }
             )
             .background(Color.ncViewerBackground(backgroundStyle))
             .contentShape(Rectangle())
@@ -435,7 +453,9 @@ struct NCMediaViewerPageView: View {
                 previewURL: previewURL,
                 fullURL: localURL,
                 backgroundStyle: backgroundStyle,
-                onZoomChanged: onZoomChanged
+                initialZoomState: page.imageZoomState,
+                onZoomChanged: onZoomChanged,
+                onZoomStateChanged: { page.imageZoomState = $0 }
             )
             .contentShape(Rectangle())
             .gesture(chromeToggleGesture())
@@ -449,7 +469,9 @@ struct NCMediaViewerPageView: View {
             previewURL: previewURL,
             fullURL: nil,
             backgroundStyle: backgroundStyle,
-            onZoomChanged: onZoomChanged
+            initialZoomState: page.imageZoomState,
+            onZoomChanged: onZoomChanged,
+            onZoomStateChanged: { page.imageZoomState = $0 }
         )
         .contentShape(Rectangle())
         .gesture(chromeToggleGesture())
