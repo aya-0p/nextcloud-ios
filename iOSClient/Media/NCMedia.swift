@@ -39,10 +39,7 @@ class NCMedia: UIViewController {
     var lastScale: CGFloat = 1.0
     var currentScale: CGFloat = 1.0
     var maxColumns: Int {
-        let screenWidth = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height)
-        let column = Int(screenWidth / 55)
-
-        return column
+        max(1, Int(collectionView.bounds.width / 55))
     }
     var transitionColumns = false
     var lastNumberOfColumns: Int = 0
@@ -88,13 +85,12 @@ class NCMedia: UIViewController {
     }
 
     internal lazy var buttonDateBarItem: UIBarButtonItem = {
-        let item = UIBarButtonItem(
-            image: UIImage(systemName: "calendar"),
-            style: .plain,
-            target: self,
-            action: #selector(presentMediaDatePicker)
-        )
-        item.accessibilityLabel = NSLocalizedString("_select_date_", comment: "")
+        let action = UIAction(title: NSLocalizedString("_select_date_", comment: ""), image: UIImage(systemName: "calendar")) { [weak self] _ in
+            self?.presentMediaDatePicker()
+        }
+        let item = UIBarButtonItem(image: UIImage(systemName: "calendar"), primaryAction: action)
+        item.menuRepresentation = action
+        item.accessibilityLabel = action.title
         if #available(iOS 27.1, *) {
             item.axisBehavior = .horizontalOnly
         }
@@ -344,6 +340,8 @@ class NCMedia: UIViewController {
     // MARK: - NotificationCenter
 
     func networkRemoveAll() async {
+        searchMediaTask?.cancel()
+        searchMediaTask = nil
         timerSearchNewMedia?.invalidate()
         timerSearchNewMedia = nil
 

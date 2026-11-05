@@ -33,9 +33,7 @@ class NCMediaNavigationController: NCMainNavigationController {
             items.append(media.searchActivityBarButtonItem)
         }
         media.navigationItem.leadingItemGroups = items.map { item in
-            let group = UIBarButtonItemGroup(barButtonItems: [item], representativeItem: nil)
-            group.alwaysAvailable = item === sidebarButtonItem
-            return group
+            UIBarButtonItemGroup(barButtonItems: [item], representativeItem: nil)
         }
     }
 
@@ -46,29 +44,14 @@ class NCMediaNavigationController: NCMainNavigationController {
 
         if media.isEditMode {
             media.tabBarSelect.show()
-            await collectionViewCommonTrailingItemGroups()
         } else {
             media.tabBarSelect.hide()
-            await mediaTrailingItemGroups()
-            await collectionViewCommonTrailingItemGroups()
         }
+        let menu = await createOptionMenu()
+        guard topViewController === media else { return }
+        setOptionMenu(menu, for: media.navigationItem)
+        media.navigationItem.trailingItemGroups = []
         configureSidebarButton()
-    }
-
-    private func mediaTrailingItemGroups() async {
-        var desiredItems: [UIBarButtonItem] = []
-
-        if let optionMenu = await self.createOptionMenu() {
-            setOptionMenu(optionMenu)
-            desiredItems.append(optionButtonItem)
-        }
-
-        let group = UIBarButtonItemGroup(
-            barButtonItems: desiredItems,
-            representativeItem: nil
-        )
-
-        topViewController?.navigationItem.trailingItemGroups = [group]
     }
 
     override func createOptionMenu() async -> UIMenu? {
@@ -103,8 +86,9 @@ class NCMediaNavigationController: NCMainNavigationController {
                         media.showOnlyImages = true
                         media.showOnlyVideos = false
                         Task {
-                            await media.loadDataSource()
                             await media.networkRemoveAll()
+                            await media.loadDataSource()
+                            media.searchNewMedia()
                         }
                     },
 
@@ -112,8 +96,9 @@ class NCMediaNavigationController: NCMainNavigationController {
                         media.showOnlyImages = false
                         media.showOnlyVideos = true
                         Task {
-                            await media.loadDataSource()
                             await media.networkRemoveAll()
+                            await media.loadDataSource()
+                            media.searchNewMedia()
                         }
                     },
 
@@ -121,8 +106,9 @@ class NCMediaNavigationController: NCMainNavigationController {
                         media.showOnlyImages = false
                         media.showOnlyVideos = false
                         Task {
-                            await media.loadDataSource()
                             await media.networkRemoveAll()
+                            await media.loadDataSource()
+                            media.searchNewMedia()
                         }
                     }
                 ]
@@ -420,7 +406,7 @@ class NCMediaNavigationController: NCMainNavigationController {
         for photo in selectedPhotos {
             guard let metadata = NCManageDatabase.shared.getMetadataFromOcId(photo) else {
                 Task {
-                    await showErrorBanner(windowScene: controller.viewIfLoaded?.window?.windowScene, error: .invalidData)
+                    await showErrorBanner(windowScene: controller.viewIfLoaded?.window?.windowScene, text: "_media_not_available_")
                 }
                 finishIfDone()
                 continue

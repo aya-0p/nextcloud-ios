@@ -38,13 +38,13 @@ class NCContextMenuMain: NSObject {
         self.sender = sender
     }
 
-    func viewMenu() -> UIMenu {
+    func viewMenu(showViewInFolder: Bool = false) -> UIMenu {
         guard let capabilities = NCNetworking.shared.capabilities[metadata.account] else {
             return UIMenu()
         }
 
         let topMenuItems = buildTopMenuItems(metadata: metadata)
-        let mainActionsMenu = buildMainActionsMenu(metadata: metadata, capabilities: capabilities)
+        let mainActionsMenu = buildMainActionsMenu(metadata: metadata, capabilities: capabilities, showViewInFolder: showViewInFolder)
         let clientIntegrationMenu = buildClientIntegrationMenuItems(capabilities: capabilities, metadata: metadata)
         let deleteMenu = buildDeleteMenu(metadata: metadata)
 
@@ -54,9 +54,10 @@ class NCContextMenuMain: NSObject {
             menuElements.append(topMenu)
         }
 
-        [mainActionsMenu, clientIntegrationMenu, deleteMenu]
+        menuElements.append(contentsOf: mainActionsMenu)
+        menuElements.append(contentsOf: [clientIntegrationMenu, deleteMenu]
             .compactMap { NCContextMenuActions.inlineMenu(children: $0) }
-            .forEach { menuElements.append($0) }
+        )
 
         return UIMenu(title: "", children: menuElements)
     }
@@ -94,23 +95,24 @@ class NCContextMenuMain: NSObject {
 
     // MARK: Main Actions Menu
 
-    private func buildMainActionsMenu(metadata: tableMetadata, capabilities: NKCapabilities.Capabilities) -> [UIMenuElement] {
-        var menuElements: [UIMenuElement] = []
+    private func buildMainActionsMenu(metadata: tableMetadata, capabilities: NKCapabilities.Capabilities, showViewInFolder: Bool) -> [UIMenuElement] {
+        // Keep the same section order as the viewer menu.
+        var openingActions: [UIMenuElement] = []
+        var editingActions: [UIMenuElement] = []
+        var savingActions: [UIMenuElement] = []
+        var securityActions: [UIMenuElement] = []
 
-        if NCNetworking.shared.isOnline,
-           !metadata.directory,
-           !capabilities.filesLockVersion.isEmpty {
-            menuElements.append(
-                NCContextMenuActions.lockUnlock(isLocked: metadata.lock,
-                                              metadata: metadata,
-                                              controller: controller)
-            )
+        if showViewInFolder, let controller {
+            openingActions.append(NCContextMenuActions.viewInFolder(metadata: metadata, controller: controller, viewController: viewController))
         }
 
         if !metadata.isDirectoryE2EE,
            metadata.classFile == NKTypeClassFile.document.rawValue,
            NextcloudKit.shared.isNetworkReachable() {
-            var availableEditors = Set(NCDocumentEditorSupport.directEditingEditorIdentifiers(account: metadata.account, contentType: metadata.contentType, fileName: metadata.fileNameView).map { $0.lowercased() })
+            var availableEditors = Set(
+                NCDocumentEditorSupport.directEditingEditorIdentifiers(account: metadata.account, contentType: metadata.contentType, fileName: metadata.fileNameView)
+                    .map { $0.lowercased() }
+            )
             if metadata.isLegacyRichdocumentsEditorAvailable {
                 availableEditors.insert(global.editorCollabora)
             }
@@ -132,60 +134,55 @@ class NCContextMenuMain: NSObject {
             }
 
             if officeActions.count == 1, let action = officeActions.first {
-                menuElements.append(action)
+                openingActions.append(action)
             } else if !officeActions.isEmpty {
-                menuElements.append(UIMenu(title: NSLocalizedString("_open_in_office_", comment: ""), image: UIImage(systemName: "doc.richtext"), children: officeActions))
+                openingActions.append(UIMenu(title: NSLocalizedString("_open_in_office_", comment: ""), image: UIImage(systemName: "doc.richtext"), children: officeActions))
             }
         }
 
-        addE2EEActions(metadata: metadata, capabilities: capabilities, mainActionsMenu: &menuElements)
-
-        if NCNetworking.shared.isOnline,
-           metadata.canSetAsAvailableOffline {
-            menuElements.append(
-                NCContextMenuActions.setAvailableOffline(
-                    metadatas: [metadata],
-                    isAnyOffline: metadata.isOffline,
-                    controller: controller
-                )
-            )
-        }
-
-        if NCNetworking.shared.isOnline,
-           let metadataMOV = NCManageDatabase.shared.getMetadataLivePhoto(metadata: metadata) {
-            menuElements.append(NCContextMenuActions.saveLivePhoto(metadata: metadata, metadataMOV: metadataMOV, windowScene: windowScene))
-        }
-
-        if NCNetworking.shared.isOnline,
-           metadata.isSavebleAsImage {
-            menuElements.append(NCContextMenuActions.saveAsScan(metadata: metadata, sceneIdentifier: sceneIdentifier))
-        }
-
         if metadata.isRenameable {
-            menuElements.append(NCContextMenuActions.rename(metadata: metadata, presenter: viewController, windowScene: windowScene))
+            editingActions.append(NCContextMenuActions.rename(metadata: metadata, presenter: viewController, windowScene: windowScene))
         }
 
         if metadata.isCopyableMovable {
-            menuElements.append(
-                NCContextMenuActions.moveOrCopy(
-                    metadatas: [metadata],
-                    account: metadata.account,
-                    controller: controller
-                )
-            )
+            editingActions.append(NCContextMenuActions.moveOrCopy(metadatas: [metadata], account: metadata.account, controller: controller))
         }
 
         if NCNetworking.shared.isOnline,
            metadata.isModifiableWithQuickLook {
-            menuElements.append(makeModifyWithQuickLookAction(metadata: metadata))
+            editingActions.append(makeModifyWithQuickLookAction(metadata: metadata))
         }
 
         if viewController is NCFiles,
            metadata.directory {
-            menuElements.append(makeColorFolderAction(metadata: metadata))
+            editingActions.append(makeColorFolderAction(metadata: metadata))
         }
 
-        return menuElements
+        if NCNetworking.shared.isOnline,
+           metadata.canSetAsAvailableOffline {
+            savingActions.append(NCContextMenuActions.setAvailableOffline(metadatas: [metadata], isAnyOffline: metadata.isOffline, controller: controller))
+        }
+
+        if NCNetworking.shared.isOnline,
+           let metadataMOV = NCManageDatabase.shared.getMetadataLivePhoto(metadata: metadata) {
+            savingActions.append(NCContextMenuActions.saveLivePhoto(metadata: metadata, metadataMOV: metadataMOV, windowScene: windowScene))
+        }
+
+        if NCNetworking.shared.isOnline,
+           metadata.isSavebleAsImage {
+            savingActions.append(NCContextMenuActions.saveAsScan(metadata: metadata, sceneIdentifier: sceneIdentifier))
+        }
+
+        if NCNetworking.shared.isOnline,
+           !metadata.directory,
+           !capabilities.filesLockVersion.isEmpty {
+            securityActions.append(NCContextMenuActions.lockUnlock(isLocked: metadata.lock, metadata: metadata, controller: controller))
+        }
+
+        addE2EEActions(metadata: metadata, capabilities: capabilities, mainActionsMenu: &securityActions)
+
+        return [openingActions, editingActions, savingActions, securityActions]
+            .compactMap { NCContextMenuActions.inlineMenu(children: $0) }
     }
 
     // MARK: E2EE Actions
@@ -229,7 +226,7 @@ class NCContextMenuMain: NSObject {
                     sceneIdentifier: self.sceneIdentifier
                 )
                 if error != .success {
-                    await showErrorBanner(windowScene: self.windowScene, text: error.errorDescription, errorCode: error.errorCode)
+                    await showErrorBanner(windowScene: self.windowScene, error: error)
                 }
             }
         }
@@ -246,11 +243,7 @@ class NCContextMenuMain: NSObject {
                     account: metadata.account
                 )
                 guard accessError == .success else {
-                    await showErrorBanner(
-                        windowScene: self.windowScene,
-                        text: accessError.errorDescription,
-                        errorCode: accessError.errorCode
-                    )
+                    await showErrorBanner(windowScene: self.windowScene, error: accessError)
                     return
                 }
 
@@ -267,9 +260,7 @@ class NCContextMenuMain: NSObject {
                     await NCManageDatabase.shared.setMetadataEncryptedAsync(ocId: metadata.ocId, encrypted: false)
                     await (self.viewController as? NCCollectionViewCommon)?.reloadDataSource()
                 } else {
-                    await showErrorBanner(windowScene: self.windowScene,
-                                          text: results.error.errorDescription,
-                                          errorCode: results.error.errorCode)
+                    await showErrorBanner(windowScene: self.windowScene, error: results.error)
                 }
             }
         }
@@ -377,8 +368,11 @@ class NCContextMenuMain: NSObject {
             if self.viewController is NCCollectionViewCommon {
                 Task {
                     if metadata.isDirectoryE2EE {
+                        let context = NCErrorContext.delete(fileName: metadata.fileNameView)
+
                         if NCNetworking.shared.isOffline {
                             await showErrorBanner(windowScene: self.windowScene,
+                                                  title: context.failureTitle ?? "_error_",
                                                   text: "_offline_not_allowed_",
                                                   errorCode: NCGlobal.shared.errorOfflineNotAllowed)
                         } else {
@@ -390,7 +384,9 @@ class NCContextMenuMain: NSObject {
                             if error == .success {
                                 completeHudBannerSuccess(token: results.token, banner: results.banner)
                             } else {
-                                completeHudBannerError(description: error.errorDescription, token: results.token, banner: results.banner)
+                                let message = error.userFriendlyMessage(for: context) ?? error.localizedGenericMessage
+
+                                completeHudBannerError(title: context.failureTitle, description: message, token: results.token, banner: results.banner)
                             }
 
                             await NCNetworking.shared.transferDispatcher.notifyAllDelegates { delegate in
@@ -400,7 +396,7 @@ class NCContextMenuMain: NSObject {
                     } else {
                         let error = await NCNetworking.shared.setStatusWaitDelete(metadatas: [metadata])
                         if error != .success {
-                            await showErrorBanner(windowScene: self.windowScene, error: error)
+                            await showErrorBanner(windowScene: self.windowScene, error: error, context: .delete(fileName: metadata.fileNameView))
                         }
                     }
                 }
@@ -473,12 +469,12 @@ class NCContextMenuMain: NSObject {
                             var iconImage = UIImage(systemName: "exclamationmark.triangle.fill")
 
                             if let iconUrl = item.icon {
+                                let displayScale = max(self.viewController.view.traitCollection.displayScale, 1)
                                 let results = await NextcloudKit.shared.downloadContentAsync(serverUrl: metadata.urlBase + iconUrl, account: metadata.account)
                                 if results.error == .success, let data = results.responseData?.data,
                                    let image = try? await NCSVGRenderer().renderSVGToUIImage(
                                     svgData: data,
-                                    size: CGSize(width: UIScreen.main.scale * 20,
-                                                 height: UIScreen.main.scale * 20),
+                                    size: CGSize(width: displayScale * 20, height: displayScale * 20),
                                     tintColor: NCBrandColor.shared.iconImageColor,
                                     trimTransparentPixels: false) {
                                     iconImage = image
@@ -499,9 +495,7 @@ class NCContextMenuMain: NSObject {
                                         params: item.params
                                     )
                                     if results.error != .success {
-                                        await showErrorBanner(windowScene: self.windowScene,
-                                                              text: results.error.errorDescription,
-                                                              errorCode: results.error.errorCode)
+                                        await showErrorBanner(windowScene: self.windowScene, error: results.error)
                                     } else {
                                         if let tooltip = results.uiResponse?.ocs.data.tooltip {
                                             await showInfoBanner(windowScene: self.windowScene, text: tooltip)

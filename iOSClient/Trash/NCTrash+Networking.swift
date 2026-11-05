@@ -8,13 +8,15 @@ import RealmSwift
 
 extension NCTrash {
     func loadListingTrash() async {
-        defer {
-            self.refreshControl.endRefreshing()
+        // If is already in-flight, do nothing
+        if serverDataActivityIndicator.isAnimating || dataSourceTask?.state == .running || dataSourceTask?.state == .suspended {
+            return
         }
 
-        // If is already in-flight, do nothing
-        if dataSourceTask?.state == .running || dataSourceTask?.state == .suspended {
-            return
+        setServerDataLoading(true)
+        defer {
+            setServerDataLoading(false)
+            refreshControl.endRefreshing()
         }
 
         let resultsListingTrash = await NextcloudKit.shared.listingTrashAsync(filename: filename, showHiddenFiles: false, account: session.account) { task in
@@ -53,7 +55,7 @@ extension NCTrash {
         let results = await NextcloudKit.shared.deleteFileOrFolderAsync(serverUrlFileName: serverUrlFileName, account: session.account)
 
         if results.error != .success {
-            await showErrorBanner(windowScene: self.windowScene, text: results.error.errorDescription, errorCode: results.error.errorCode)
+            await showErrorBanner(windowScene: self.windowScene, error: results.error)
         }
         await self.database.deleteTrashAsync(fileId: nil, account: session.account)
         await self.reloadDataSource()
@@ -68,7 +70,7 @@ extension NCTrash {
             let results = await NextcloudKit.shared.deleteFileOrFolderAsync(serverUrlFileName: serverUrlFileName, account: session.account)
 
             if results.error != .success {
-                await showErrorBanner(windowScene: self.windowScene, text: results.error.errorDescription, errorCode: results.error.errorCode)
+                await showErrorBanner(windowScene: self.windowScene, error: results.error, context: .delete(fileName: result.trashbinFileName))
             }
             await self.database.deleteTrashAsync(fileId: fileId, account: session.account)
             await self.reloadDataSource()

@@ -93,11 +93,6 @@ final class NCGlobal: Sendable {
     // CHUNK
     let chunkSize                                   = 100000000
 
-    // NCViewerProviderContextMenu
-    //
-    let maxAutoDownload: UInt64                     = 50000000      // 50MB
-    let maxAutoDownloadCellular: UInt64             = 10000000      // 10MB
-
     // Layout
     //
     let layoutList                                  = "typeLayoutList"
@@ -139,7 +134,6 @@ final class NCGlobal: Sendable {
     let errorMethodNotSupported: Int            = 405
     let errorConflict: Int                      = 409
     let errorPreconditionFailed: Int            = 412
-    let errorUnsupportedMediaType: Int          = 415
     let errorExpectationFailed: Int             = 417
     let errorInternalServerError: Int           = 500
     let errorMaintenance: Int                   = 503

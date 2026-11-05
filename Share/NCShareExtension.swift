@@ -53,6 +53,8 @@ class NCShareExtension: UIViewController {
     var banner: LucidBanner?
     var sceneIdentifier: String = UUID().uuidString
     private var isPresentingNoAccountAlert = false
+    private var isPresentingPasscode = false
+    private var isPasscodeAuthenticated = false
 
     // MARK: - View Life Cycle
 
@@ -110,11 +112,8 @@ class NCShareExtension: UIViewController {
                 return
             }
 
-            if NCPreferences().presentPasscode {
-                NCPasscode.shared.presentPasscode(viewController: self, delegate: self) {
-                    NCPasscode.shared.enableTouchFaceID()
-                }
-            }
+            self.isPasscodeAuthenticated = false
+            self.requestPasscodeIfNeeded()
         }
 
         // Verify version
@@ -165,11 +164,7 @@ class NCShareExtension: UIViewController {
                 }
             }
 
-            if NCPreferences().presentPasscode {
-                NCPasscode.shared.presentPasscode(viewController: self, delegate: self) {
-                    NCPasscode.shared.enableTouchFaceID()
-                }
-            }
+            self.requestPasscodeIfNeeded()
 
             self.collectionView.reloadData()
         }
@@ -189,7 +184,7 @@ class NCShareExtension: UIViewController {
     }
 
     private func validateAccount() -> Bool {
-        guard !NCPasscode.shared.isPasscodeReset else {
+        guard !NCPasscodeModel.isPasscodeReset else {
             return showNoAccountAlert()
         }
 
@@ -344,13 +339,15 @@ class NCShareExtension: UIViewController {
         guard let capabilities = NCNetworking.shared.capabilities[session.account] else {
             return
         }
-        let alertController = UIAlertController.createFolderWith(serverUrl: serverUrl, session: session, capabilities: capabilities) { error in
+        let alertController = UIAlertController.createFolderWith(serverUrl: serverUrl, session: session, capabilities: capabilities) { error, folderName in
+            let context = NCErrorContext.createFolder(folderName: folderName)
+
             if error == .success {
                 Task {
                     await self.loadFolder()
                 }
-            } else {
-                self.showAlert(title: "_error_createsubfolders_upload_", description: error.errorDescription)
+            } else if let message = error.userFriendlyMessage(for: context) {
+                self.showAlert(title: context.failureTitle ?? "_error_", description: message)
             }
         }
         self.present(alertController, animated: true)
@@ -444,6 +441,7 @@ extension NCShareExtension {
         await NCNetworkingE2EE.beginNewServerKeyValidationCycle()
 
         var error: NKError?
+        var errorContext: NCErrorContext = .generic
         guard let window = self.view.window else {
             return
         }
@@ -468,6 +466,7 @@ extension NCShareExtension {
 
             error = await self.upload(metadata: metadata)
             if error != .success {
+                errorContext = .upload(fileName: metadata.fileNameView)
                 break
             }
         }
@@ -475,7 +474,11 @@ extension NCShareExtension {
         if error == .success {
             banner?.update(payload: LucidBannerPayload.Update(stage: .success, horizontalLayout: .centered(width: 100)), for: self.token)
         } else {
-            banner?.update(payload: LucidBannerPayload.Update(subtitle: error?.errorDescription, stage: .error), for: self.token)
+            let payload = LucidBannerPayload.Update(title: errorContext.failureTitle ?? NSLocalizedString("_error_", comment: ""),
+                                                    subtitle: error?.userFriendlyMessage(for: errorContext) ?? "",
+                                                    stage: .error)
+
+            banner?.update(payload: payload, for: self.token)
         }
 
         Task { @MainActor in
@@ -575,18 +578,22 @@ extension NCShareExtension {
     }
 }
 
-extension NCShareExtension: NCPasscodeDelegate {
-    func passcodeReset(_ passcodeViewController: TOPasscodeViewController) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            passcodeViewController.dismiss(animated: false)
-            self.cancel(with: .noAccount)
-        }
-    }
-
-    func evaluatePolicy(_ passcodeViewController: TOPasscodeViewController, isCorrectCode: Bool) {
-        if !isCorrectCode {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                passcodeViewController.dismiss(animated: false)
+extension NCShareExtension {
+    /// Require authentication once per foreground session without reopening after dismissal.
+    private func requestPasscodeIfNeeded() {
+        guard NCPreferences().presentPasscode,
+              !isPasscodeAuthenticated,
+              !isPresentingPasscode else { return }
+        isPresentingPasscode = true
+        // Embed in the content controller; the helper hides the outer navigation bar.
+        NCPasscodeView.embed(in: self) { [weak self] result in
+            guard let self else { return }
+            self.isPresentingPasscode = false
+            switch result {
+            case .authenticated:
+                self.isPasscodeAuthenticated = true
+                _ = self.validateAccount()
+            case .cancelled, .reset, .configured, .disabled:
                 self.cancel(with: .noAccount)
             }
         }
